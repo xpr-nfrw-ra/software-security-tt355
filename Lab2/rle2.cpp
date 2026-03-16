@@ -5,13 +5,17 @@
 #include <iomanip>
 #include <cstdint>
 
-static const int MAX_RUN     = 129;   // 127 + 2
-static const int MAX_LITERAL = 128;   // 127 + 1
+static const int MAX_RUN     = 129;
+static const int MAX_LITERAL = 128;
 
 uint8_t makeControlByte(int flag, int count)
 {
     return static_cast<uint8_t>((flag << 7) | (count & 0x7F));
 }
+
+// ---------------------------------------------------------------------------
+// Encoder
+// ---------------------------------------------------------------------------
 
 std::vector<uint8_t> rleEncode(const std::vector<uint8_t>& data)
 {
@@ -58,6 +62,44 @@ std::vector<uint8_t> rleEncode(const std::vector<uint8_t>& data)
     }
     return out;
 }
+
+std::vector<uint8_t> rleDecode(const std::vector<uint8_t>& data)
+{
+    std::vector<uint8_t> out;
+    size_t i = 0;
+    while (i < data.size()) {
+        uint8_t ctrl  = data[i++];
+        int     flag  = (ctrl >> 7) & 1;
+        int     count =  ctrl & 0x7F;
+
+        if (flag == 1) {
+            // Run token: repeat the next byte (count + 2) times
+            if (i >= data.size()) {
+                std::cerr << "Warning: missing value byte after run token.\n";
+                break;
+            }
+            uint8_t value = data[i++];
+            int reps = count + 2;
+            for (int k = 0; k < reps; k++)
+                out.push_back(value);
+        } else {
+            // Literal token: copy the next (count + 1) bytes as-is
+            int bytes = count + 1;
+            for (int k = 0; k < bytes; k++) {
+                if (i >= data.size()) {
+                    std::cerr << "Warning: not enough literal bytes.\n";
+                    break;
+                }
+                out.push_back(data[i++]);
+            }
+        }
+    }
+    return out;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 void printHex(const std::vector<uint8_t>& v, const std::string& label)
 {
@@ -145,10 +187,17 @@ int main()
         }
 
         std::vector<uint8_t> encoded = rleEncode(input);
+        std::vector<uint8_t> decoded = rleDecode(encoded);
 
         printHex(input,   "Original ");
         printHex(encoded, "Encoded  ");
+        printHex(decoded, "Decoded  ");
         printAnnotated(encoded);
+
+        if (decoded == input)
+            std::cout << "Round-trip check: OK\n";
+        else
+            std::cout << "Round-trip check: MISMATCH\n";
 
         float ratio = 100.0f * encoded.size() / input.size();
         std::cout << "Compression: " << input.size() << " → " << encoded.size()
