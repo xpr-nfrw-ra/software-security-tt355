@@ -5,39 +5,6 @@
 #include <iomanip>
 #include <cstdint>
 
-static void encodeRun(std::vector<uint8_t>& out, uint8_t value, int count)
-{
-    while (count > 0) {
-        if (value == 0xFF) {
-            if (count >= 2) {
-                int batch = std::min(count, 254);
-                out.push_back(0xFF);
-                out.push_back(static_cast<uint8_t>(batch));
-                out.push_back(0xFF);
-                count -= batch;
-            } else {
-                // single 0xFF → escape it
-                out.push_back(0xFF);
-                out.push_back(0xFF);
-                count--;
-            }
-        } else {
-            if (count >= 3) {
-                // emit run token
-                int batch = std::min(count, 254);
-                out.push_back(0xFF);
-                out.push_back(static_cast<uint8_t>(batch));
-                out.push_back(value);
-                count -= batch;
-            } else {
-                // emit 1 or 2 raw literals
-                out.push_back(value);
-                count--;
-            }
-        }
-    }
-}
-
 std::vector<uint8_t> rleEncode(const std::vector<uint8_t>& data)
 {
     std::vector<uint8_t> out;
@@ -46,17 +13,89 @@ std::vector<uint8_t> rleEncode(const std::vector<uint8_t>& data)
     size_t i = 0;
     while (i < data.size()) {
         uint8_t val = data[i];
-        int runLen = 1;
 
-        // Count how many consecutive identical bytes follow
+        // Count consecutive identical bytes (capped at 254)
+        int runLen = 1;
         while (i + runLen < data.size() && data[i + runLen] == val && runLen < 254)
             runLen++;
 
-        encodeRun(out, val, runLen);
+        // Decide how to encode this run
+        int remaining = runLen;
+        while (remaining > 0) {
+            if (val == 0xFF) {
+                if (remaining >= 2) {
+                    // Run token for 0xFF: FF <count> FF
+                    int batch = std::min(remaining, 254);
+                    out.push_back(0xFF);
+                    out.push_back(static_cast<uint8_t>(batch));
+                    out.push_back(0xFF);
+                    remaining -= batch;
+                } else {
+                    // Single 0xFF: escape as FF FF
+                    out.push_back(0xFF);
+                    out.push_back(0xFF);
+                    remaining--;
+                }
+            } else {
+                if (remaining >= 3) {
+                    // Run token: FF <count> <value>
+                    int batch = std::min(remaining, 254);
+                    out.push_back(0xFF);
+                    out.push_back(static_cast<uint8_t>(batch));
+                    out.push_back(val);
+                    remaining -= batch;
+                } else {
+                    // Raw literal (1 or 2 bytes not worth encoding)
+                    out.push_back(val);
+                    remaining--;
+                }
+            }
+        }
+
         i += runLen;
     }
     return out;
 }
+
+std::vector<uint8_t> rleDecode(const std::vector<uint8_t>& data)
+{
+    std::vector<uint8_t> out;
+    size_t i = 0;
+    while (i < data.size()) {
+        if (data[i] == 0xFF) {
+            // Escape sequence - need at least one more byte
+            if (i + 1 >= data.size()) {
+                std::cerr << "Warning: incomplete escape sequence at end of input.\n";
+                break;
+            }
+            uint8_t next = data[i + 1];
+            if (next == 0xFF) {
+                // FF FF → single literal 0xFF
+                out.push_back(0xFF);
+                i += 2;
+            } else {
+                // FF <count> <value> → repeat value <count> times
+                if (i + 2 >= data.size()) {
+                    std::cerr << "Warning: incomplete run token at end of input.\n";
+                    break;
+                }
+                uint8_t value = data[i + 2];
+                for (int k = 0; k < next; k++)
+                    out.push_back(value);
+                i += 3;
+            }
+        } else {
+            // Plain literal byte
+            out.push_back(data[i]);
+            i++;
+        }
+    }
+    return out;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 void printHex(const std::vector<uint8_t>& v, const std::string& label)
 {
@@ -81,17 +120,19 @@ std::vector<uint8_t> parseInput(const std::string& line)
             val = std::max(0, std::min(255, val));
         }
         data.push_back(static_cast<uint8_t>(val));
-        // skip commas or other separators
         char c;
         while (ss.peek() == ',' || ss.peek() == ' ') ss.get(c);
     }
     return data;
 }
 
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
 
 int main()
 {
-    std::cout << "=== RLE Encoder (FF escape-byte variant) ===\n";
+    std::cout << "=== RLE Encoder/Decoder (FF escape-byte variant) ===\n";
     std::cout << "Enter byte values separated by spaces or commas (decimal 0-255).\n";
     std::cout << "Type 'quit' to exit.\n\n";
 
@@ -109,9 +150,16 @@ int main()
         }
 
         std::vector<uint8_t> encoded = rleEncode(input);
+        std::vector<uint8_t> decoded = rleDecode(encoded);
 
         printHex(input,   "Original ");
         printHex(encoded, "Encoded  ");
+        printHex(decoded, "Decoded  ");
+
+        if (decoded == input)
+            std::cout << "Round-trip check: OK\n";
+        else
+            std::cout << "Round-trip check: MISMATCH\n";
 
         float ratio = 100.0f * encoded.size() / input.size();
         std::cout << "Compression: " << input.size() << " → " << encoded.size()
