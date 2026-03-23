@@ -1,0 +1,42 @@
+# Visual Studio build artifacts
+*.obj
+*.pch
+*.pdb
+*.ilk
+*.log
+*.tlog
+*.lastbuildstate
+*.idb
+*.exp
+*.lib
+*.res
+*.manifest
+*.cache
+*.ipch
+*.opensdf
+*.sdf
+*.suo
+*.user
+*.ncb
+*.opendb
+*.db
+*.aps
+
+# Build directories
+x64/
+Debug/
+Release/
+*.dir/
+out/
+
+# VS directories
+.vs/
+ipch/
+
+# OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.tmp
+*~
