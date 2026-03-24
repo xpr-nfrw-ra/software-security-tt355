@@ -429,6 +429,7 @@ int main(int argc, char* argv[]) {
         std::string outputFile = std::string(argv[2]) + ".encrypted";
         AESCipher cipher(key);
         if (cipher.encryptFile(argv[2], outputFile, opts.compress)) {
+            FileOperations::deleteFile(argv[2]);
             std::cout << "File encrypted successfully: " << outputFile << std::endl;
         }
     }
@@ -458,6 +459,7 @@ int main(int argc, char* argv[]) {
 
         AESCipher cipher(key);
         if (cipher.decryptFile(inputFile, outputFile)) {
+            FileOperations::deleteFile(inputFile);
             std::cout << "File decrypted successfully: " << outputFile << std::endl;
         }
     }

@@ -5,6 +5,7 @@
 #include <cstring>
 #include <stdexcept>
 
+#define NOMINMAX
 #include <windows.h>
 #include <bcrypt.h>
 #pragma comment(lib, "bcrypt")
