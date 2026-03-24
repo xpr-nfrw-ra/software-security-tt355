@@ -21,6 +21,7 @@
 *.opendb
 *.db
 *.aps
+UpgradeLog*.htm
 
 # Build directories
 x64/
